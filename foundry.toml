@@ -1,5 +1,6 @@
 [profile.default]
 src = "contracts"
+test = "foundry/test"
 out = "out"
 libs = ["/Users/moueshouta/development/Blockchain/job/defi-erc4626-hardhat/node_modules", "lib"]
 solc = "0.8.24"

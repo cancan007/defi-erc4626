@@ -2,8 +2,8 @@
 pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
-import {ERC4626Vault} from "ERC4626Vault.sol";
-import {MintableERC20} from "test/MintableERC20.sol";
+import {ERC4626Vault} from "contracts/ERC4626Vault.sol";
+import {MintableERC20} from "contracts/test/MintableERC20.sol";
 import {VaultHandler} from "./handlers/VaultHandler.sol";
 
 /**
