@@ -6,8 +6,8 @@
     "test": "hardhat test",
     "slither": "slither . --config-file slither.config.json",
     "semgrep": "semgrep scan --config semgrep/solidity.yml contracts",
-    "echidna": "echidna contracts/echidna/ERC4626EchidnaHarness.sol --config echidna.yaml",
-    "fuzz": "cd foundry && forge test -vv"
+    "echidna": "bash scripts/run-echidna.sh",
+    "fuzz": "forge test -vv"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
