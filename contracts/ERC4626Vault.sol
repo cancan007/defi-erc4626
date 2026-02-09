@@ -25,54 +25,48 @@ contract ERC4626Vault is ERC4626, ReentrancyGuard, Ownable2Step {
         IERC20 asset_,
         string memory shareName,
         string memory shareSymbol
-    )
-        ERC20(shareName, shareSymbol)
-        ERC4626(asset_)
-        Ownable(msg.sender)
-    {
+    ) ERC20(shareName, shareSymbol) ERC4626(asset_) Ownable(msg.sender) {
         _transferOwnership(msg.sender);
     }
 
     // ---- Reentrancy-safe entrypoints (wrap OZ logic) ----
 
-    function deposit(uint256 assets, address receiver)
-        public
-        override
-        nonReentrant
-        returns (uint256)
-    {
+    function deposit(
+        uint256 assets,
+        address receiver
+    ) public override nonReentrant returns (uint256) {
         return super.deposit(assets, receiver);
     }
 
-    function mint(uint256 shares, address receiver)
-        public
-        override
-        nonReentrant
-        returns (uint256)
-    {
+    function mint(
+        uint256 shares,
+        address receiver
+    ) public override nonReentrant returns (uint256) {
         return super.mint(shares, receiver);
     }
 
-    function withdraw(uint256 assets, address receiver, address owner)
-        public
-        override
-        nonReentrant
-        returns (uint256)
-    {
+    function withdraw(
+        uint256 assets,
+        address receiver,
+        address owner
+    ) public override nonReentrant returns (uint256) {
         return super.withdraw(assets, receiver, owner);
     }
 
-    function redeem(uint256 shares, address receiver, address owner)
-        public
-        override
-        nonReentrant
-        returns (uint256)
-    {
+    function redeem(
+        uint256 shares,
+        address receiver,
+        address owner
+    ) public override nonReentrant returns (uint256) {
         return super.redeem(shares, receiver, owner);
     }
 
     // Optional safety: allow owner to rescue unrelated tokens sent by mistake (not the vault asset)
-    function rescueToken(IERC20 token, address to, uint256 amount) external onlyOwner {
+    function rescueToken(
+        IERC20 token,
+        address to,
+        uint256 amount
+    ) external onlyOwner {
         require(address(token) != address(asset()), "cannot rescue asset");
         require(to != address(0), "zero addr");
         token.transfer(to, amount);

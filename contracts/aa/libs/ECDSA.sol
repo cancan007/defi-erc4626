@@ -4,11 +4,19 @@ pragma solidity ^0.8.20;
 library ECDSA {
     error InvalidSignature();
 
-    function toEthSignedMessageHash(bytes32 hash) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash));
+    function toEthSignedMessageHash(
+        bytes32 hash
+    ) internal pure returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked("\x19Ethereum Signed Message:\n32", hash)
+            );
     }
 
-    function recover(bytes32 hash, bytes memory sig) internal pure returns (address) {
+    function recover(
+        bytes32 hash,
+        bytes memory sig
+    ) internal pure returns (address) {
         if (sig.length != 65) revert InvalidSignature();
         bytes32 r;
         bytes32 s;

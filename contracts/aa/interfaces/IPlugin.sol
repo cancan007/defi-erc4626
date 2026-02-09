@@ -8,6 +8,18 @@ interface IPlugin {
     function onInstall(bytes calldata data) external;
     function onUninstall(bytes calldata data) external;
 
-    function preExecutionHook(address caller, address to, uint256 value, bytes calldata data) external;
-    function postExecutionHook(address caller, address to, uint256 value, bytes calldata data, bool success, bytes calldata ret) external;
+    function preExecutionHook(
+        address caller,
+        address to,
+        uint256 value,
+        bytes calldata data
+    ) external;
+    function postExecutionHook(
+        address caller,
+        address to,
+        uint256 value,
+        bytes calldata data,
+        bool success,
+        bytes calldata ret
+    ) external;
 }

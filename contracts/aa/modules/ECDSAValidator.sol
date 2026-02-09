@@ -23,7 +23,10 @@ contract ECDSAValidator is IValidator {
         owner = address(0);
     }
 
-    function validateUserOp(bytes32 userOpHash, bytes calldata signature) external view override returns (bool) {
+    function validateUserOp(
+        bytes32 userOpHash,
+        bytes calldata signature
+    ) external view override returns (bool) {
         address _owner = owner;
         if (_owner == address(0)) revert NotInitialized();
 

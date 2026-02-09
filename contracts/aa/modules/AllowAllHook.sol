@@ -8,6 +8,18 @@ contract AllowAllHook is IHook {
     function onInstall(bytes calldata) external override {}
     function onUninstall(bytes calldata) external override {}
 
-    function preCheck(address, address, uint256, bytes calldata) external override {}
-    function postCheck(address, address, uint256, bytes calldata, bool, bytes calldata) external override {}
+    function preCheck(
+        address,
+        address,
+        uint256,
+        bytes calldata
+    ) external override {}
+    function postCheck(
+        address,
+        address,
+        uint256,
+        bytes calldata,
+        bool,
+        bytes calldata
+    ) external override {}
 }

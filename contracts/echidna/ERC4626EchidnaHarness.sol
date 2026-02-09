@@ -71,7 +71,11 @@ contract ERC4626EchidnaHarness {
     }
 
     // "No free lunch": if you redeem all your shares, you shouldn't get more assets than vault holds.
-    function echidna_redeem_all_not_exceed_totalAssets() public view returns (bool) {
+    function echidna_redeem_all_not_exceed_totalAssets()
+        public
+        view
+        returns (bool)
+    {
         uint256 s = vault.balanceOf(address(this));
         uint256 a = vault.previewRedeem(s);
         return a <= vault.totalAssets();

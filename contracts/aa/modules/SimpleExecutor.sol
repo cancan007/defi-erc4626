@@ -18,7 +18,11 @@ contract SimpleExecutor is IExecutor {
         account = address(0);
     }
 
-    function execute(address to, uint256 value, bytes calldata data) external override returns (bytes memory ret) {
+    function execute(
+        address to,
+        uint256 value,
+        bytes calldata data
+    ) external override returns (bytes memory ret) {
         if (msg.sender != account) revert OnlyAccount();
         (bool ok, bytes memory out) = to.call{value: value}(data);
         if (!ok) {

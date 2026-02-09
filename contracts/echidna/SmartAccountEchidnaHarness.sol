@@ -10,16 +10,50 @@ import {ModuleType} from "../aa/interfaces/ERC7579.sol";
 
 /// @notice An attacker helper that tries to call owner-gated functions.
 contract Attacker {
-    function tryExecute(address account, address to, uint256 value, bytes calldata data) external returns (bool ok) {
-        (ok, ) = account.call(abi.encodeWithSignature("execute(address,uint256,bytes)", to, value, data));
+    function tryExecute(
+        address account,
+        address to,
+        uint256 value,
+        bytes calldata data
+    ) external returns (bool ok) {
+        (ok, ) = account.call(
+            abi.encodeWithSignature(
+                "execute(address,uint256,bytes)",
+                to,
+                value,
+                data
+            )
+        );
     }
 
-    function tryInstallModule(address account, uint256 moduleType, address module, bytes calldata data) external returns (bool ok) {
-        (ok, ) = account.call(abi.encodeWithSignature("installModule(uint256,address,bytes)", moduleType, module, data));
+    function tryInstallModule(
+        address account,
+        uint256 moduleType,
+        address module,
+        bytes calldata data
+    ) external returns (bool ok) {
+        (ok, ) = account.call(
+            abi.encodeWithSignature(
+                "installModule(uint256,address,bytes)",
+                moduleType,
+                module,
+                data
+            )
+        );
     }
 
-    function tryInstallPlugin(address account, address plugin, bytes calldata data) external returns (bool ok) {
-        (ok, ) = account.call(abi.encodeWithSignature("installPlugin(address,bytes)", plugin, data));
+    function tryInstallPlugin(
+        address account,
+        address plugin,
+        bytes calldata data
+    ) external returns (bool ok) {
+        (ok, ) = account.call(
+            abi.encodeWithSignature(
+                "installPlugin(address,bytes)",
+                plugin,
+                data
+            )
+        );
     }
 }
 
@@ -40,11 +74,20 @@ contract SmartAccountEchidnaHarness {
         execModule = new SimpleExecutor();
 
         // Owner is this harness contract.
-        account = new SmartAccount(address(this), address(ep), address(validator), abi.encode(address(this)));
+        account = new SmartAccount(
+            address(this),
+            address(ep),
+            address(validator),
+            abi.encode(address(this))
+        );
 
         // Install hook/executor as owner.
         account.installModule(ModuleType.HOOK, address(hook), "");
-        account.installModule(ModuleType.EXECUTOR, address(execModule), abi.encode(address(account)));
+        account.installModule(
+            ModuleType.EXECUTOR,
+            address(execModule),
+            abi.encode(address(account))
+        );
 
         attacker = new Attacker();
     }
@@ -53,19 +96,33 @@ contract SmartAccountEchidnaHarness {
 
     /// @notice Attacker cannot execute arbitrary calls.
     function echidna_attacker_cannot_execute() public returns (bool) {
-        bool ok = attacker.tryExecute(address(account), address(this), 0, abi.encodeWithSignature("noop()"));
+        bool ok = attacker.tryExecute(
+            address(account),
+            address(this),
+            0,
+            abi.encodeWithSignature("noop()")
+        );
         return ok == false;
     }
 
     /// @notice Attacker cannot install modules.
     function echidna_attacker_cannot_install_module() public returns (bool) {
-        bool ok = attacker.tryInstallModule(address(account), ModuleType.HOOK, address(hook), "");
+        bool ok = attacker.tryInstallModule(
+            address(account),
+            ModuleType.HOOK,
+            address(hook),
+            ""
+        );
         return ok == false;
     }
 
     /// @notice Attacker cannot install plugins.
     function echidna_attacker_cannot_install_plugin() public returns (bool) {
-        bool ok = attacker.tryInstallPlugin(address(account), address(hook), "");
+        bool ok = attacker.tryInstallPlugin(
+            address(account),
+            address(hook),
+            ""
+        );
         return ok == false;
     }
 

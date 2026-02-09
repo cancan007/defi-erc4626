@@ -8,23 +8,26 @@ import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
 contract MockEntryPointV07 {
     mapping(address => uint256) private _deposit;
 
-    function getUserOpHash(PackedUserOperation calldata userOp) external view returns (bytes32) {
+    function getUserOpHash(
+        PackedUserOperation calldata userOp
+    ) external view returns (bytes32) {
         // NOTE: This is a simplified hash for tests, not canonical EntryPoint logic.
         // Canonical logic includes chain id, this address, and packing rules.
-        return keccak256(
-            abi.encode(
-                block.chainid,
-                address(this),
-                userOp.sender,
-                userOp.nonce,
-                keccak256(userOp.initCode),
-                keccak256(userOp.callData),
-                userOp.accountGasLimits,
-                userOp.preVerificationGas,
-                userOp.gasFees,
-                keccak256(userOp.paymasterAndData)
-            )
-        );
+        return
+            keccak256(
+                abi.encode(
+                    block.chainid,
+                    address(this),
+                    userOp.sender,
+                    userOp.nonce,
+                    keccak256(userOp.initCode),
+                    keccak256(userOp.callData),
+                    userOp.accountGasLimits,
+                    userOp.preVerificationGas,
+                    userOp.gasFees,
+                    keccak256(userOp.paymasterAndData)
+                )
+            );
     }
 
     function depositTo(address account) external payable {
@@ -35,7 +38,10 @@ contract MockEntryPointV07 {
         return _deposit[account];
     }
 
-    function withdrawTo(address payable withdrawAddress, uint256 amount) external {
+    function withdrawTo(
+        address payable withdrawAddress,
+        uint256 amount
+    ) external {
         // For tests: allow the caller to withdraw their own tracked deposit.
         address caller = msg.sender;
         require(_deposit[caller] >= amount, "insufficient");

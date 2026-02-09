@@ -18,19 +18,27 @@ struct PackedUserOperation {
 }
 
 library PackedUserOperationLib {
-    function callGasLimit(PackedUserOperation calldata op) internal pure returns (uint256) {
+    function callGasLimit(
+        PackedUserOperation calldata op
+    ) internal pure returns (uint256) {
         return uint256(uint128(uint256(op.accountGasLimits)));
     }
 
-    function verificationGasLimit(PackedUserOperation calldata op) internal pure returns (uint256) {
+    function verificationGasLimit(
+        PackedUserOperation calldata op
+    ) internal pure returns (uint256) {
         return uint256(uint128(uint256(op.accountGasLimits) >> 128));
     }
 
-    function maxFeePerGas(PackedUserOperation calldata op) internal pure returns (uint256) {
+    function maxFeePerGas(
+        PackedUserOperation calldata op
+    ) internal pure returns (uint256) {
         return uint256(uint128(uint256(op.gasFees)));
     }
 
-    function maxPriorityFeePerGas(PackedUserOperation calldata op) internal pure returns (uint256) {
+    function maxPriorityFeePerGas(
+        PackedUserOperation calldata op
+    ) internal pure returns (uint256) {
         return uint256(uint128(uint256(op.gasFees) >> 128));
     }
 }

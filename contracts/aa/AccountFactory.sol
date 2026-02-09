@@ -5,7 +5,11 @@ import {SmartAccount} from "./SmartAccount.sol";
 
 /// @notice Simple CREATE2 factory for SmartAccount deployments.
 contract AccountFactory {
-    event AccountDeployed(address indexed account, address indexed owner, bytes32 salt);
+    event AccountDeployed(
+        address indexed account,
+        address indexed owner,
+        bytes32 salt
+    );
 
     address public immutable entryPoint;
     address public immutable defaultValidator;
@@ -15,16 +19,29 @@ contract AccountFactory {
         defaultValidator = _defaultValidator;
     }
 
-    function getAddress(address owner, bytes32 salt) external view returns (address) {
+    function getAddress(
+        address owner,
+        bytes32 salt
+    ) external view returns (address) {
         bytes memory initCode = abi.encodePacked(
             type(SmartAccount).creationCode,
             abi.encode(owner, entryPoint, defaultValidator, abi.encode(owner)) // validator init: owner
         );
-        bytes32 hash = keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, keccak256(initCode)));
+        bytes32 hash = keccak256(
+            abi.encodePacked(
+                bytes1(0xff),
+                address(this),
+                salt,
+                keccak256(initCode)
+            )
+        );
         return address(uint160(uint256(hash)));
     }
 
-    function deploy(address owner, bytes32 salt) external returns (address account) {
+    function deploy(
+        address owner,
+        bytes32 salt
+    ) external returns (address account) {
         bytes memory initCode = abi.encodePacked(
             type(SmartAccount).creationCode,
             abi.encode(owner, entryPoint, defaultValidator, abi.encode(owner))
