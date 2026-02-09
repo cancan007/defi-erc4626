@@ -6,7 +6,14 @@ import {IEntryPoint} from "./interfaces/IEntryPoint.sol";
 import {PackedUserOperation} from "./interfaces/PackedUserOperation.sol";
 import {IPlugin} from "./interfaces/IPlugin.sol";
 import {IPluginManager} from "./interfaces/IPluginManager.sol";
-import {ModuleType, IModule, IValidator, IExecutor, IHook, IModuleManager} from "./interfaces/ERC7579.sol";
+import {
+    ModuleType,
+    IModule,
+    IValidator,
+    IExecutor,
+    IHook,
+    IModuleManager
+} from "./interfaces/ERC7579.sol";
 
 /// @notice ERC-4337 Smart Account scaffold (EntryPoint v0.7 / PackedUserOperation) with:
 /// - ERC-6900-ish plugin hooks (pre/post)
@@ -35,7 +42,10 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
     // -----------------------------
     event OwnerChanged(address indexed oldOwner, address indexed newOwner);
     event EntryPointChanged(address indexed oldEP, address indexed newEP);
-    event DefaultValidatorChanged(address indexed oldValidator, address indexed newValidator);
+    event DefaultValidatorChanged(
+        address indexed oldValidator,
+        address indexed newValidator
+    );
 
     // -----------------------------
     // Storage
@@ -54,8 +64,14 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
     // Default validator (required for validateUserOp)
     address public defaultValidator; // implements IValidator
 
-    // Simple nonce for demo. If you need keyed nonces, extend this.
-    uint256 public nonce;
+    // nonceKey (uint192) => sequence (uint64)
+    mapping(uint192 => uint64) public nonceSequence;
+
+    // optional: default lane for backward compatibility
+    uint192 internal constant DEFAULT_NONCE_KEY = 0;
+
+    mapping(uint192 => address) public validatorByKey;
+    mapping(uint192 => address) public executorByKey;
 
     modifier onlyEntryPoint() {
         if (msg.sender != address(entryPoint)) revert NotEntryPoint();
@@ -67,12 +83,21 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         _;
     }
 
-    constructor(address _owner, address _entryPoint, address _defaultValidator, bytes memory validatorInitData) {
+    constructor(
+        address _owner,
+        address _entryPoint,
+        address _defaultValidator,
+        bytes memory validatorInitData
+    ) {
         owner = _owner;
         entryPoint = IEntryPoint(_entryPoint);
 
         if (_defaultValidator != address(0)) {
-            _installModuleInternal(ModuleType.VALIDATOR, _defaultValidator, validatorInitData);
+            _installModuleInternal(
+                ModuleType.VALIDATOR,
+                _defaultValidator,
+                validatorInitData
+            );
             defaultValidator = _defaultValidator;
         }
     }
@@ -91,7 +116,8 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
     }
 
     function setDefaultValidator(address validator) external onlyOwner {
-        if (!_moduleInstalled[ModuleType.VALIDATOR][validator]) revert ModuleNotInstalled();
+        if (!_moduleInstalled[ModuleType.VALIDATOR][validator])
+            revert ModuleNotInstalled();
         emit DefaultValidatorChanged(defaultValidator, validator);
         defaultValidator = validator;
     }
@@ -103,32 +129,47 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         PackedUserOperation calldata userOp,
         bytes32 userOpHash,
         uint256 missingAccountFunds
-    ) external override onlyEntryPoint returns (uint256 validationData) {
-        // Basic nonce check
-        if (userOp.nonce != nonce) revert ValidationFailed();
-        nonce++;
+    ) external override onlyEntryPoint returns (uint256) {
+        (uint192 key, uint64 seq) = _splitNonce(userOp.nonce);
 
-        address validator = defaultValidator;
+        // 1) replay protection per key
+        if (seq != nonceSequence[key]) revert ValidationFailed();
+        nonceSequence[key] = seq + 1;
+
+        // 2) choose validator by key (fallback to defaultValidator if unregistered)
+        address validator = validatorByKey[key];
+        if (validator == address(0)) validator = defaultValidator;
         if (validator == address(0)) revert ValidatorNotSet();
 
-        bool ok = IValidator(validator).validateUserOp(userOpHash, userOp.signature);
+        bool ok = IValidator(validator).validateUserOp(
+            userOpHash,
+            userOp.signature
+        );
         if (!ok) revert ValidationFailed();
 
-        // Pay missing funds to EntryPoint if needed
         if (missingAccountFunds != 0) {
-            (bool sent, ) = payable(msg.sender).call{value: missingAccountFunds}("");
+            (bool sent, ) = payable(msg.sender).call{
+                value: missingAccountFunds
+            }("");
             if (!sent) return 1;
         }
-
         return 0;
     }
 
     // -----------------------------
     // Execution
     // -----------------------------
-    function execute(address to, uint256 value, bytes calldata data) external returns (bytes memory ret) {
+    function execute(
+        address to,
+        uint256 value,
+        bytes calldata data
+    ) external returns (bytes memory ret) {
         // allow EntryPoint OR owner OR executor modules
-        if (msg.sender != address(entryPoint) && msg.sender != owner && !_isExecutor(msg.sender)) {
+        if (
+            msg.sender != address(entryPoint) &&
+            msg.sender != owner &&
+            !_isExecutor(msg.sender)
+        ) {
             revert NotOwner();
         }
 
@@ -157,7 +198,10 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         entryPoint.depositTo{value: msg.value}(address(this));
     }
 
-    function withdrawDepositTo(address payable to, uint256 amount) external onlyOwner {
+    function withdrawDepositTo(
+        address payable to,
+        uint256 amount
+    ) external onlyOwner {
         entryPoint.withdrawTo(to, amount);
     }
 
@@ -168,7 +212,10 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
     // -----------------------------
     // ERC-6900-ish PluginManager
     // -----------------------------
-    function installPlugin(address plugin, bytes calldata data) external override onlyOwner {
+    function installPlugin(
+        address plugin,
+        bytes calldata data
+    ) external override onlyOwner {
         if (_pluginInstalled[plugin]) revert PluginAlreadyInstalled();
         _pluginInstalled[plugin] = true;
         _plugins.push(plugin);
@@ -176,7 +223,10 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         emit PluginInstalled(plugin);
     }
 
-    function uninstallPlugin(address plugin, bytes calldata data) external override onlyOwner {
+    function uninstallPlugin(
+        address plugin,
+        bytes calldata data
+    ) external override onlyOwner {
         if (!_pluginInstalled[plugin]) revert PluginNotInstalled();
         _pluginInstalled[plugin] = false;
 
@@ -192,7 +242,9 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         emit PluginUninstalled(plugin);
     }
 
-    function isPluginInstalled(address plugin) external view override returns (bool) {
+    function isPluginInstalled(
+        address plugin
+    ) external view override returns (bool) {
         return _pluginInstalled[plugin];
     }
 
@@ -200,7 +252,12 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         return _plugins;
     }
 
-    function _runPluginPreHooks(address caller, address to, uint256 value, bytes calldata data) internal {
+    function _runPluginPreHooks(
+        address caller,
+        address to,
+        uint256 value,
+        bytes calldata data
+    ) internal {
         for (uint256 i = 0; i < _plugins.length; i++) {
             address p = _plugins[i];
             if (_pluginInstalled[p]) {
@@ -209,11 +266,25 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         }
     }
 
-    function _runPluginPostHooks(address caller, address to, uint256 value, bytes calldata data, bool success, bytes memory ret) internal {
+    function _runPluginPostHooks(
+        address caller,
+        address to,
+        uint256 value,
+        bytes calldata data,
+        bool success,
+        bytes memory ret
+    ) internal {
         for (uint256 i = 0; i < _plugins.length; i++) {
             address p = _plugins[i];
             if (_pluginInstalled[p]) {
-                IPlugin(p).postExecutionHook(caller, to, value, data, success, ret);
+                IPlugin(p).postExecutionHook(
+                    caller,
+                    to,
+                    value,
+                    data,
+                    success,
+                    ret
+                );
             }
         }
     }
@@ -221,11 +292,19 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
     // -----------------------------
     // ERC-7579-ish ModuleManager
     // -----------------------------
-    function installModule(uint256 moduleType, address module, bytes calldata data) external override onlyOwner {
+    function installModule(
+        uint256 moduleType,
+        address module,
+        bytes calldata data
+    ) external override onlyOwner {
         _installModuleInternal(moduleType, module, data);
     }
 
-    function uninstallModule(uint256 moduleType, address module, bytes calldata data) external override onlyOwner {
+    function uninstallModule(
+        uint256 moduleType,
+        address module,
+        bytes calldata data
+    ) external override onlyOwner {
         if (!_moduleInstalled[moduleType][module]) revert ModuleNotInstalled();
         _moduleInstalled[moduleType][module] = false;
 
@@ -247,17 +326,27 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         }
     }
 
-    function isModuleInstalled(uint256 moduleType, address module) external view override returns (bool) {
+    function isModuleInstalled(
+        uint256 moduleType,
+        address module
+    ) external view override returns (bool) {
         return _moduleInstalled[moduleType][module];
     }
 
-    function getModules(uint256 moduleType) external view override returns (address[] memory) {
+    function getModules(
+        uint256 moduleType
+    ) external view override returns (address[] memory) {
         return _modules[moduleType];
     }
 
-    function _installModuleInternal(uint256 moduleType, address module, bytes memory data) internal {
+    function _installModuleInternal(
+        uint256 moduleType,
+        address module,
+        bytes memory data
+    ) internal {
         if (moduleType < 1 || moduleType > 4) revert InvalidModuleType();
-        if (_moduleInstalled[moduleType][module]) revert ModuleAlreadyInstalled();
+        if (_moduleInstalled[moduleType][module])
+            revert ModuleAlreadyInstalled();
         _moduleInstalled[moduleType][module] = true;
         _modules[moduleType].push(module);
 
@@ -269,7 +358,12 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         return _moduleInstalled[ModuleType.EXECUTOR][maybeExecutor];
     }
 
-    function _runHookPreChecks(address caller, address to, uint256 value, bytes calldata data) internal {
+    function _runHookPreChecks(
+        address caller,
+        address to,
+        uint256 value,
+        bytes calldata data
+    ) internal {
         address[] storage hooks = _modules[ModuleType.HOOK];
         for (uint256 i = 0; i < hooks.length; i++) {
             address h = hooks[i];
@@ -279,7 +373,14 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         }
     }
 
-    function _runHookPostChecks(address caller, address to, uint256 value, bytes calldata data, bool success, bytes memory ret) internal {
+    function _runHookPostChecks(
+        address caller,
+        address to,
+        uint256 value,
+        bytes calldata data,
+        bool success,
+        bytes memory ret
+    ) internal {
         address[] storage hooks = _modules[ModuleType.HOOK];
         for (uint256 i = 0; i < hooks.length; i++) {
             address h = hooks[i];
@@ -287,5 +388,19 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
                 IHook(h).postCheck(caller, to, value, data, success, ret);
             }
         }
+    }
+
+    function _splitNonce(
+        uint256 fullNonce
+    ) internal pure returns (uint192 key, uint64 seq) {
+        key = uint192(fullNonce >> 64);
+        seq = uint64(fullNonce);
+    }
+
+    function _packNonce(
+        uint192 key,
+        uint64 seq
+    ) internal pure returns (uint256) {
+        return (uint256(key) << 64) | uint256(seq);
     }
 }
