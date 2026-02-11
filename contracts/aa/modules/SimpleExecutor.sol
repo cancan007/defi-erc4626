@@ -11,7 +11,11 @@ contract SimpleExecutor is IExecutor {
     error OnlyAccount();
 
     function onInstall(bytes calldata data) external override {
-        account = abi.decode(data, (address));
+        (uint192 laneKey, bytes memory init) = abi.decode(
+            data,
+            (uint192, bytes)
+        );
+        account = msg.sender;
     }
 
     function onUninstall(bytes calldata) external override {

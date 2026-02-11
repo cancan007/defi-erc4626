@@ -84,9 +84,9 @@ contract SmartAccountEchidnaHarness {
         // Install hook/executor as owner.
         account.installModule(ModuleType.HOOK, address(hook), "");
         account.installModule(
-            ModuleType.EXECUTOR,
+            ModuleType.EXECUTOR, //NOTE: this should be laneKey, not ModuleSolidEnum value
             address(execModule),
-            abi.encode(address(account))
+            abi.encode(uint192(0), abi.encode(uint192(0), ""))
         );
 
         attacker = new Attacker();

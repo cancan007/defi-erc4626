@@ -64,14 +64,26 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
     // Default validator (required for validateUserOp)
     address public defaultValidator; // implements IValidator
 
-    // nonceKey (uint192) => sequence (uint64)
-    mapping(uint192 => uint64) public nonceSequence;
-
     // optional: default lane for backward compatibility
     uint192 internal constant DEFAULT_NONCE_KEY = 0;
 
+    // laneKey (uint192) => sequence (uint64)
+    mapping(uint192 => uint64) public nonceSequence;
+
+    // laneKey => validator / executor
     mapping(uint192 => address) public validatorByKey;
     mapping(uint192 => address) public executorByKey;
+
+    event LaneValidatorSet(
+        uint192 indexed laneKey,
+        address indexed oldValidator,
+        address indexed newValidator
+    );
+    event LaneExecutorSet(
+        uint192 indexed laneKey,
+        address indexed oldExecutor,
+        address indexed newExecutor
+    );
 
     modifier onlyEntryPoint() {
         if (msg.sender != address(entryPoint)) revert NotEntryPoint();
@@ -122,6 +134,37 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         defaultValidator = validator;
     }
 
+    function setLaneValidator(
+        uint192 laneKey,
+        address validator
+    ) external onlyOwner {
+        // validatorは installed validator module であることを要求（安全）
+        if (
+            validator != address(0) &&
+            !_moduleInstalled[ModuleType.VALIDATOR][validator]
+        ) {
+            revert ModuleNotInstalled();
+        }
+        address old = validatorByKey[laneKey];
+        validatorByKey[laneKey] = validator;
+        emit LaneValidatorSet(laneKey, old, validator);
+    }
+
+    function setLaneExecutor(
+        uint192 laneKey,
+        address executor
+    ) external onlyOwner {
+        if (
+            executor != address(0) &&
+            !_moduleInstalled[ModuleType.EXECUTOR][executor]
+        ) {
+            revert ModuleNotInstalled();
+        }
+        address old = executorByKey[laneKey];
+        executorByKey[laneKey] = executor;
+        emit LaneExecutorSet(laneKey, old, executor);
+    }
+
     // -----------------------------
     // ERC-4337 v0.7: validateUserOp
     // -----------------------------
@@ -130,14 +173,14 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         bytes32 userOpHash,
         uint256 missingAccountFunds
     ) external override onlyEntryPoint returns (uint256) {
-        (uint192 key, uint64 seq) = _splitNonce(userOp.nonce);
+        (uint192 laneKey, uint64 seq) = _splitNonce(userOp.nonce);
 
-        // 1) replay protection per key
-        if (seq != nonceSequence[key]) revert ValidationFailed();
-        nonceSequence[key] = seq + 1;
+        // replay protection per lane
+        if (seq != nonceSequence[laneKey]) revert ValidationFailed();
+        nonceSequence[laneKey] = seq + 1;
 
-        // 2) choose validator by key (fallback to defaultValidator if unregistered)
-        address validator = validatorByKey[key];
+        // pick validator for this lane (fallback to default)
+        address validator = validatorByKey[laneKey];
         if (validator == address(0)) validator = defaultValidator;
         if (validator == address(0)) revert ValidatorNotSet();
 
@@ -159,27 +202,51 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
     // -----------------------------
     // Execution
     // -----------------------------
+    function executeFromEntryPoint(
+        uint192 laneKey,
+        address to,
+        uint256 value,
+        bytes calldata data
+    ) external onlyEntryPoint returns (bytes memory ret) {
+        // laneKeyにexecutorが設定されているなら、それに従う（レーンごとの実行制約）
+        address exec = executorByKey[laneKey];
+        if (exec != address(0)) {
+            // 例：exec が許可するターゲット/selector等をhookやexecutor内で制約する
+            // ここでは最低限「execがインストール済みである」ことを保証
+            if (!_moduleInstalled[ModuleType.EXECUTOR][exec])
+                revert ModuleNotInstalled();
+        }
+
+        return _executeInternal(msg.sender, to, value, data);
+    }
+
     function execute(
         address to,
         uint256 value,
         bytes calldata data
     ) external returns (bytes memory ret) {
-        // allow EntryPoint OR owner OR executor modules
+        // owner / executor module direct path (manual)
         if (
             msg.sender != address(entryPoint) &&
             msg.sender != owner &&
             !_isExecutor(msg.sender)
-        ) {
-            revert NotOwner();
-        }
+        ) revert NotOwner();
+        return _executeInternal(msg.sender, to, value, data);
+    }
 
-        _runPluginPreHooks(msg.sender, to, value, data);
-        _runHookPreChecks(msg.sender, to, value, data);
+    function _executeInternal(
+        address caller,
+        address to,
+        uint256 value,
+        bytes calldata data
+    ) internal returns (bytes memory) {
+        _runPluginPreHooks(caller, to, value, data);
+        _runHookPreChecks(caller, to, value, data);
 
         (bool success, bytes memory out) = to.call{value: value}(data);
 
-        _runHookPostChecks(msg.sender, to, value, data, success, out);
-        _runPluginPostHooks(msg.sender, to, value, data, success, out);
+        _runHookPostChecks(caller, to, value, data, success, out);
+        _runPluginPostHooks(caller, to, value, data, success, out);
 
         if (!success) {
             assembly {
@@ -297,6 +364,28 @@ contract SmartAccount is IAccount, IPluginManager, IModuleManager {
         address module,
         bytes calldata data
     ) external override onlyOwner {
+        // (optional) lane-aware encoding
+        // If data is (uint192 laneKey, bytes init), auto wire lane to module
+        if (data.length >= 32) {
+            (uint192 laneKey, bytes memory init) = abi.decode(
+                data,
+                (uint192, bytes)
+            );
+            _installModuleInternal(moduleType, module, init);
+
+            if (moduleType == ModuleType.VALIDATOR) {
+                address old = validatorByKey[laneKey];
+                validatorByKey[laneKey] = module;
+                emit LaneValidatorSet(laneKey, old, module);
+            } else if (moduleType == ModuleType.EXECUTOR) {
+                address old = executorByKey[laneKey];
+                executorByKey[laneKey] = module;
+                emit LaneExecutorSet(laneKey, old, module);
+            }
+            return;
+        }
+
+        // fallback: keep old behavior (no lane wiring)
         _installModuleInternal(moduleType, module, data);
     }
 
